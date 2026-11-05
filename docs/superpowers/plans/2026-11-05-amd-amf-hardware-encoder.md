@@ -191,7 +191,7 @@ git commit -m "feat(platform): implement AMF runtime dynamic loading and D3D11 c
 **Files:**
 - Create: `crates/platform/src/amf/session.rs`
 
-- [ ] **Step 1: Write test for creating and configuring an AMF video encoder component**
+- [x] **Step 1: Write test for creating and configuring an AMF video encoder component**
 
 In `crates/platform/src/amf/session.rs` (under `#[cfg(test)]`):
 ```rust
@@ -216,12 +216,12 @@ fn test_amf_h264_session_initialization() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p filmcraft-platform -- test_amf_h264_session_initialization`
 Expected: FAIL (`AmfSession` not defined).
 
-- [ ] **Step 3: Implement `AmfSession`**
+- [x] **Step 3: Implement `AmfSession`**
 
 In `crates/platform/src/amf/session.rs`:
 - Instantiate `AMFComponent` via `factory.CreateComponent(context, L"AMFVideoEncoderVCE_AVC")` (or `L"AMFVideoEncoder_HEVC"`).
@@ -241,12 +241,12 @@ In `crates/platform/src/amf/session.rs`:
 - Implement `drain()`:
   - Calls `component.Drain()` and collects remaining queued packets.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p filmcraft-platform -- test_amf_h264_session_initialization`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/platform/src/amf/session.rs

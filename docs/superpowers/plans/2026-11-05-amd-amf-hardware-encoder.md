@@ -260,7 +260,7 @@ git commit -m "feat(platform): implement AMF encoder component session and frame
 **Files:**
 - Create: `crates/platform/src/amf/export.rs`
 
-- [ ] **Step 1: Write test verifying Annex B to length-prefixed conversion and parameter set extraction**
+- [x] **Step 1: Write test verifying Annex B to length-prefixed conversion and parameter set extraction**
 
 In `crates/platform/src/amf/export.rs` (under `#[cfg(test)]`):
 ```rust
@@ -282,12 +282,12 @@ fn test_annexb_to_avcc_conversion() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p filmcraft-platform -- test_annexb_to_avcc_conversion`
 Expected: FAIL (`parse_annexb_packets` not defined).
 
-- [ ] **Step 3: Implement `AmfExportEncoder` and `VideoEncoder` trait**
+- [x] **Step 3: Implement `AmfExportEncoder` and `VideoEncoder` trait**
 
 In `crates/platform/src/amf/export.rs`:
 - Implement `parse_annexb_packets` for both H.264 (extracting SPS/PPS) and HEVC (extracting VPS/SPS/PPS).
@@ -304,12 +304,12 @@ In `crates/platform/src/amf/export.rs`:
     - `flush(&mut self) -> filmcraft_export::Result<Vec<EncodedPacket>>`:
       - Drains session and packages all trailing frames.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p filmcraft-platform -- test_annexb_to_avcc_conversion`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/platform/src/amf/export.rs

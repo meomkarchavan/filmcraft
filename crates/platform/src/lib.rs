@@ -31,6 +31,8 @@
 // Used by the Windows (and, for `biplanar`, Linux) decoders; compiled everywhere so their tests run
 // on every system.
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+#[cfg(target_os = "windows")]
+pub mod amf;
 mod annexb;
 #[cfg_attr(not(any(target_os = "windows", target_os = "linux")), allow(dead_code))]
 mod biplanar;

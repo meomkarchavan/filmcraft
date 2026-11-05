@@ -324,7 +324,7 @@ git commit -m "feat(platform): implement VideoEncoder export adapter for AMF"
 - Create: `crates/platform/src/amf/mod.rs`
 - Modify: `crates/platform/src/lib.rs`
 
-- [ ] **Step 1: Write test for factory registration and capability probing**
+- [x] **Step 1: Write test for factory registration and capability probing**
 
 In `crates/platform/src/amf/mod.rs`:
 ```rust
@@ -339,12 +339,12 @@ fn test_amf_factory_declines_unsupported_settings() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p filmcraft-platform -- test_amf_factory_declines_unsupported_settings`
 Expected: FAIL (`amf_encoder_factory` not defined).
 
-- [ ] **Step 3: Implement module exports and register in `lib.rs`**
+- [x] **Step 3: Implement module exports and register in `lib.rs`**
 
 In `crates/platform/src/amf/mod.rs`:
 - Define `pub fn amf_encoder_factory(...) -> Option<filmcraft_export::Result<Box<dyn VideoEncoder>>>`.
@@ -358,12 +358,12 @@ In `crates/platform/src/lib.rs`:
   - Register `amf::hevc_available` with `filmcraft_export::register_format_probe`.
   - Call `amf::warm_hevc_probe()`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p filmcraft-platform -- test_amf_factory_declines_unsupported_settings`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/platform/src/amf/mod.rs crates/platform/src/lib.rs

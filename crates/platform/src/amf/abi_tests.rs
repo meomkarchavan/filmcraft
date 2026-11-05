@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod amf_abi_tests {
     use super::super::ffi::*;
 
     #[test]
@@ -20,6 +20,30 @@ mod tests {
     }
 
     #[test]
+    fn amf_structure_sizes_and_alignments() {
+        assert_eq!(std::mem::size_of::<AMFGuid>(), 16);
+        assert_eq!(std::mem::align_of::<AMFGuid>(), 4);
+
+        assert_eq!(std::mem::size_of::<AMFRate>(), 8);
+        assert_eq!(std::mem::align_of::<AMFRate>(), 4);
+
+        assert_eq!(std::mem::size_of::<AMFSize>(), 8);
+        assert_eq!(std::mem::align_of::<AMFSize>(), 4);
+
+        assert_eq!(std::mem::size_of::<AMFPoint>(), 8);
+        assert_eq!(std::mem::align_of::<AMFPoint>(), 4);
+
+        assert_eq!(std::mem::size_of::<AMFRect>(), 16);
+        assert_eq!(std::mem::align_of::<AMFRect>(), 4);
+
+        assert_eq!(std::mem::size_of::<AMFVariantStruct>(), 24);
+        assert_eq!(std::mem::align_of::<AMFVariantStruct>(), 8);
+
+        assert_eq!(std::mem::size_of::<AMFVariantValue>(), 16);
+        assert_eq!(std::mem::align_of::<AMFVariantValue>(), 8);
+    }
+
+    #[test]
     fn amf_variant_struct_size_and_alignment() {
         assert_eq!(std::mem::size_of::<AMFVariantStruct>(), 24);
         assert_eq!(std::mem::align_of::<AMFVariantStruct>(), 8);
@@ -34,6 +58,38 @@ mod tests {
         let var_false = AMFVariantStruct::from_bool(false);
         assert_eq!(var_false.type_, AMF_VARIANT_BOOL);
         assert_eq!(var_false.as_bool(), Some(false));
+
+        let empty = AMFVariantStruct::empty();
+        assert_eq!(empty.type_, AMF_VARIANT_EMPTY);
+        assert_eq!(empty.as_bool(), None);
+        assert_eq!(empty.as_int64(), None);
+
+        let int_val = AMFVariantStruct::from_int64(42);
+        assert_eq!(int_val.type_, AMF_VARIANT_INT64);
+        assert_eq!(int_val.as_int64(), Some(42));
+        assert_eq!(int_val.as_bool(), None);
+    }
+
+    #[test]
+    fn amf_guid_constants_and_layout() {
+        let guid = AMFGuid {
+            data1: 0x12345678,
+            data2: 0x9ABC,
+            data3: 0xDEF0,
+            data4: [1, 2, 3, 4, 5, 6, 7, 8],
+        };
+        assert_eq!(guid.data1, 0x12345678);
+        assert_eq!(guid.data2, 0x9ABC);
+        assert_eq!(guid.data3, 0xDEF0);
+        assert_eq!(guid.data4, [1, 2, 3, 4, 5, 6, 7, 8]);
+
+        assert_eq!(IID_AMFPropertyStorage.data1, 0xc7cec05b);
+        assert_eq!(IID_AMFPropertyStorageEx.data1, 0x524b07cf);
+        assert_eq!(IID_AMFContext.data1, 0xa76a13f0);
+        assert_eq!(IID_AMFData.data1, 0xa0ee3387);
+        assert_eq!(IID_AMFSurface.data1, 0x3075dbe3);
+        assert_eq!(IID_AMFBuffer.data1, 0xb04b7248);
+        assert_eq!(IID_AMFComponent.data1, 0x8b776269);
     }
 
     #[test]
@@ -43,8 +99,10 @@ mod tests {
         assert_eq!(std::mem::size_of::<AMFPropertyStorageExVtbl>(), 17 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFDataVtbl>(), 23 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFBufferVtbl>(), 28 * ptr_size);
+        assert_eq!(std::mem::size_of::<AMFPlaneVtbl>(), 12 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFSurfaceVtbl>(), 34 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFContextVtbl>(), 43 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFComponentVtbl>(), 28 * ptr_size);
+        assert_eq!(std::mem::size_of::<AMFFactoryVtbl>(), 7 * ptr_size);
     }
 }

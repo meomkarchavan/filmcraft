@@ -440,19 +440,19 @@ pub struct AMFPropertyStorageExVtbl {
     pub RemoveObserver: unsafe extern "system" fn(pThis: *mut AMFPropertyStorageEx, pObserver: *mut c_void),
 
     // AMFPropertyStorageEx methods
-    pub GetPropertiesInfoCount: unsafe extern "system" fn(pThis: *const AMFPropertyStorage) -> usize,
+    pub GetPropertiesInfoCount: unsafe extern "system" fn(pThis: *mut AMFPropertyStorageEx) -> usize,
     pub GetPropertyInfoAt: unsafe extern "system" fn(
-        pThis: *const AMFPropertyStorage,
+        pThis: *mut AMFPropertyStorageEx,
         index: usize,
         ppInfo: *mut *const c_void,
     ) -> AMF_RESULT,
     pub GetPropertyInfo: unsafe extern "system" fn(
-        pThis: *const AMFPropertyStorage,
+        pThis: *mut AMFPropertyStorageEx,
         name: *const u16,
         ppInfo: *mut *const c_void,
     ) -> AMF_RESULT,
     pub ValidateProperty: unsafe extern "system" fn(
-        pThis: *const AMFPropertyStorage,
+        pThis: *mut AMFPropertyStorageEx,
         name: *const u16,
         value: AMFVariantStruct,
         pOutValidated: *mut AMFVariantStruct,
@@ -997,19 +997,19 @@ pub struct AMFComponentVtbl {
     pub RemoveObserver: unsafe extern "system" fn(pThis: *mut AMFComponent, pObserver: *mut c_void),
 
     // AMFPropertyStorageEx methods
-    pub GetPropertiesInfoCount: unsafe extern "system" fn(pThis: *const AMFPropertyStorage) -> usize,
+    pub GetPropertiesInfoCount: unsafe extern "system" fn(pThis: *mut AMFComponent) -> usize,
     pub GetPropertyInfoAt: unsafe extern "system" fn(
-        pThis: *const AMFPropertyStorage,
+        pThis: *mut AMFComponent,
         index: usize,
         ppInfo: *mut *const c_void,
     ) -> AMF_RESULT,
     pub GetPropertyInfo: unsafe extern "system" fn(
-        pThis: *const AMFPropertyStorage,
+        pThis: *mut AMFComponent,
         name: *const u16,
         ppInfo: *mut *const c_void,
     ) -> AMF_RESULT,
     pub ValidateProperty: unsafe extern "system" fn(
-        pThis: *const AMFPropertyStorage,
+        pThis: *mut AMFComponent,
         name: *const u16,
         value: AMFVariantStruct,
         pOutValidated: *mut AMFVariantStruct,

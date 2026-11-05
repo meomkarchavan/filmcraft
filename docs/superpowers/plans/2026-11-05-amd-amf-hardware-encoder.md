@@ -141,7 +141,7 @@ git commit -m "test(platform): add AMF ABI layout and structure size tests"
 **Files:**
 - Create: `crates/platform/src/amf/device.rs`
 
-- [ ] **Step 1: Write test for loading AMF runtime and probing factory**
+- [x] **Step 1: Write test for loading AMF runtime and probing factory**
 
 In `crates/platform/src/amf/device.rs` (under `#[cfg(test)]`):
 ```rust
@@ -156,12 +156,12 @@ fn probe_amfrt64_dll_if_present() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails before implementation**
+- [x] **Step 2: Run test to verify it fails before implementation**
 
 Run: `cargo test -p filmcraft-platform -- probe_amfrt64_dll`
 Expected: FAIL (`AmfRuntime` not defined).
 
-- [ ] **Step 3: Implement `AmfRuntime` and `AmfDevice`**
+- [x] **Step 3: Implement `AmfRuntime` and `AmfDevice`**
 
 In `crates/platform/src/amf/device.rs`:
 - Use `windows::Win32::System::LibraryLoader::LoadLibraryExW` with `LOAD_LIBRARY_SEARCH_SYSTEM32` to load `amfrt64.dll`.
@@ -172,12 +172,12 @@ In `crates/platform/src/amf/device.rs`:
   - Calls `context.InitDX11(d3d11_device, AMF_DX11_0)`.
   - Implements `Drop` to release COM interfaces cleanly.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p filmcraft-platform -- probe_amfrt64_dll`
 Expected: PASS on Windows with AMD GPU driver.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/platform/src/amf/device.rs

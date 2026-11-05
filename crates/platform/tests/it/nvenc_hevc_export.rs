@@ -114,7 +114,11 @@ fn delta(before: filmcraft_export::HwEncodeStats) -> (u64, u64, u64) {
 fn hevc_exports_play_everywhere() {
     let _one = crate::common::NVENC_SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     filmcraft_platform::register();
-    assert_eq!(filmcraft_export::available(Format::Hevc), hevc_available(), "the format is available iff NVENC can encode HEVC");
+    assert_eq!(
+        filmcraft_export::available(Format::Hevc),
+        hevc_available() || filmcraft_platform::amf::hevc_available(),
+        "the format is available iff a hardware backend can encode HEVC",
+    );
     if !hevc_available() {
         eprintln!("SKIPPED: no NVENC HEVC here");
         return;
@@ -287,7 +291,7 @@ fn interlaced_output_is_refused_before_any_encoder_is_asked() {
     assert!(export(&p, seq, &s, &m, &Progress::default()).is_err());
     assert_eq!(delta(before), (0, 0, 0));
 
-    if !hevc_available() {
+    if !filmcraft_export::available(Format::Hevc) {
         // no HEVC encoder: the export's own "encoder not available" error, nothing written, no panic
         let err = export(&p, seq, &hevc(tmp("none.mp4")), &m, &Progress::default()).expect_err("no encoder").to_string();
         assert!(err.contains("encoder not available"), "{err}");

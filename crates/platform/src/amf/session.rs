@@ -8,8 +8,9 @@
 
 use std::collections::VecDeque;
 use std::ffi::c_void;
+use std::sync::Arc;
 
-use super::device::{AmfDevice, AmfRuntime};
+use super::device::AmfDevice;
 use super::ffi::{
     AMFBuffer, AMFComponent, AMFContext, AMFData, AMFSurface, AMFVariantStruct, AMF_COLOR_BIT_DEPTH_10,
     AMF_COLOR_BIT_DEPTH_8, AMF_DATA_DTS, AMF_EOF, AMF_INPUT_FULL, AMF_MEMORY_HOST, AMF_OK, AMF_REPEAT,
@@ -19,8 +20,10 @@ use super::ffi::{
     AMF_VIDEO_ENCODER_HEVC_NUM_GOPS_PER_IDR, AMF_VIDEO_ENCODER_HEVC_OUTPUT_DATA_TYPE,
     AMF_VIDEO_ENCODER_HEVC_PEAK_BITRATE, AMF_VIDEO_ENCODER_HEVC_PROFILE,
     AMF_VIDEO_ENCODER_HEVC_PROFILE_MAIN, AMF_VIDEO_ENCODER_HEVC_PROFILE_MAIN_10,
-    AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD, AMF_VIDEO_ENCODER_HEVC_TARGET_BITRATE,
-    AMF_VIDEO_ENCODER_HEVC_USAGE, AMF_VIDEO_ENCODER_IDR_PERIOD_SIZE, AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE,
+    AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD, AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CBR,
+    AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR,
+    AMF_VIDEO_ENCODER_HEVC_TARGET_BITRATE, AMF_VIDEO_ENCODER_HEVC_USAGE,
+    AMF_VIDEO_ENCODER_IDR_PERIOD_SIZE, AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE,
     AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_I, AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_IDR,
     AMF_VIDEO_ENCODER_PEAK_BITRATE, AMF_VIDEO_ENCODER_PROFILE, AMF_VIDEO_ENCODER_PROFILE_BASELINE,
     AMF_VIDEO_ENCODER_PROFILE_HIGH, AMF_VIDEO_ENCODER_PROFILE_MAIN,
@@ -146,7 +149,7 @@ pub struct AmfSession {
     component: *mut AMFComponent,
     context: *mut AMFContext,
     config: AmfConfig,
-    _runtime: AmfRuntime,
+    _device: Arc<AmfDevice>,
     pending_packets: VecDeque<AmfPacket>,
 }
 
@@ -165,12 +168,12 @@ impl std::fmt::Debug for AmfSession {
 
 impl AmfSession {
     /// Opens a new AMF hardware encoder session for the specified configuration.
-    pub fn open(device: &AmfDevice, config: AmfConfig) -> Result<Self, String> {
+    pub fn open(device: &Arc<AmfDevice>, config: AmfConfig) -> Result<Self, String> {
         // Validate hostile inputs: dimensions
         if config.width == 0 || config.height == 0 {
             return Err("Invalid dimensions: width and height must be non-zero".into());
         }
-        if config.width % 2 != 0 || config.height % 2 != 0 {
+        if !config.width.is_multiple_of(2) || !config.height.is_multiple_of(2) {
             return Err(format!(
                 "Invalid dimensions: width ({}) and height ({}) must be even numbers",
                 config.width, config.height
@@ -250,10 +253,11 @@ impl AmfSession {
 
         let size_var = AMFVariantStruct::from_size(config.width as i32, config.height as i32);
         let rate_var = AMFVariantStruct::from_rate(config.fps_num, config.fps_den);
-        let rc_method = if config.cbr {
-            AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR
-        } else {
-            AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR
+        let rc_method = match (config.codec, config.cbr) {
+            (AmfCodec::H264, true) => AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR,
+            (AmfCodec::H264, false) => AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR,
+            (AmfCodec::Hevc, true) => AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CBR,
+            (AmfCodec::Hevc, false) => AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR,
         };
         let target_bitrate = config.bitrate_kbps as i64 * 1000;
         let peak_kbps = if config.max_bitrate_kbps > 0 {
@@ -374,7 +378,7 @@ impl AmfSession {
             component,
             context: context_ptr,
             config,
-            _runtime: device.runtime().clone(),
+            _device: Arc::clone(device),
             pending_packets: VecDeque::new(),
         })
     }
@@ -384,6 +388,7 @@ impl AmfSession {
         &self.config
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn submit_surface(
         &mut self,
         format: AMF_SURFACE_FORMAT,
@@ -418,7 +423,7 @@ impl AmfSession {
             ));
         }
 
-        let chroma_height = (height + 1) / 2;
+        let chroma_height = height.div_ceil(2);
         let uv_row_bytes = y_row_bytes;
         if uv_stride < uv_row_bytes {
             return Err(format!(
@@ -454,53 +459,63 @@ impl AmfSession {
         }
         let surface_guard = SurfaceGuard(surface);
 
-        // SAFETY: surface is valid; GetPlaneAt retrieves valid AMFPlane sub-object pointers.
-        let (p0_native, p0_hpitch, p1_native, p1_hpitch) = unsafe {
-            let surf_vtbl = &*(*surface).pVtbl;
-            let plane0 = (surf_vtbl.GetPlaneAt)(surface, 0);
-            let plane1 = (surf_vtbl.GetPlaneAt)(surface, 1);
-            if plane0.is_null() || plane1.is_null() {
-                return Err("Allocated surface missing plane 0 or plane 1".into());
-            }
-            let p0_vtbl = &*(*plane0).pVtbl;
-            let p1_vtbl = &*(*plane1).pVtbl;
-
-            let p0_ptr = (p0_vtbl.GetNative)(plane0) as *mut u8;
-            let p0_pitch = (p0_vtbl.GetHPitch)(plane0);
-            let p1_ptr = (p1_vtbl.GetNative)(plane1) as *mut u8;
-            let p1_pitch = (p1_vtbl.GetHPitch)(plane1);
-
-            if p0_ptr.is_null() || p1_ptr.is_null() {
-                return Err("Surface plane native buffer is null".into());
-            }
-            if p0_pitch <= 0 || p1_pitch <= 0 {
-                return Err("Surface plane pitch is non-positive".into());
-            }
-            (p0_ptr, p0_pitch as usize, p1_ptr, p1_pitch as usize)
-        };
-
-        if p0_hpitch < y_row_bytes {
-            return Err(format!(
-                "Surface Y plane pitch ({p0_hpitch}) < row width ({y_row_bytes})"
-            ));
-        }
-        if p1_hpitch < uv_row_bytes {
-            return Err(format!(
-                "Surface UV plane pitch ({p1_hpitch}) < row width ({uv_row_bytes})"
-            ));
-        }
-
-        // SAFETY: Source and destination bounds were verified above; rows do not overlap.
+        // Copy host frame data into surface planes
+        // SAFETY: surface is allocated with AMF_MEMORY_HOST; planes are valid host memory with HPitch strides.
         unsafe {
-            for row in 0..height {
-                let src_ptr = y_plane.as_ptr().add(row * y_stride);
-                let dst_ptr = p0_native.add(row * p0_hpitch);
-                std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, y_row_bytes);
+            let surf_vtbl = &*(*surface).pVtbl;
+            let planes_count = (surf_vtbl.GetPlanesCount)(surface);
+            if planes_count < 2 {
+                return Err(format!("Allocated AMFSurface has fewer than 2 planes: {planes_count}"));
             }
-            for row in 0..chroma_height {
-                let src_ptr = uv_plane.as_ptr().add(row * uv_stride);
-                let dst_ptr = p1_native.add(row * p1_hpitch);
-                std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, uv_row_bytes);
+
+            let p_plane_y = (surf_vtbl.GetPlaneAt)(surface, 0);
+            if p_plane_y.is_null() {
+                return Err("Failed to get Y plane from AMFSurface".into());
+            }
+            let plane_y_vtbl = &*(*p_plane_y).pVtbl;
+            let y_native = (plane_y_vtbl.GetNative)(p_plane_y) as *mut u8;
+            let y_hpitch = (plane_y_vtbl.GetHPitch)(p_plane_y) as usize;
+            if y_native.is_null() || y_hpitch < y_row_bytes {
+                return Err("Invalid native buffer or pitch on Y plane".into());
+            }
+
+            for r in 0..height {
+                let src_offset = r
+                    .checked_mul(y_stride)
+                    .ok_or_else(|| "Y source stride offset overflow".to_string())?;
+                let dst_offset = r
+                    .checked_mul(y_hpitch)
+                    .ok_or_else(|| "Y destination stride offset overflow".to_string())?;
+                std::ptr::copy_nonoverlapping(
+                    y_plane.as_ptr().add(src_offset),
+                    y_native.add(dst_offset),
+                    y_row_bytes,
+                );
+            }
+
+            let p_plane_uv = (surf_vtbl.GetPlaneAt)(surface, 1);
+            if p_plane_uv.is_null() {
+                return Err("Failed to get UV plane from AMFSurface".into());
+            }
+            let plane_uv_vtbl = &*(*p_plane_uv).pVtbl;
+            let uv_native = (plane_uv_vtbl.GetNative)(p_plane_uv) as *mut u8;
+            let uv_hpitch = (plane_uv_vtbl.GetHPitch)(p_plane_uv) as usize;
+            if uv_native.is_null() || uv_hpitch < uv_row_bytes {
+                return Err("Invalid native buffer or pitch on UV plane".into());
+            }
+
+            for r in 0..chroma_height {
+                let src_offset = r
+                    .checked_mul(uv_stride)
+                    .ok_or_else(|| "UV source stride offset overflow".to_string())?;
+                let dst_offset = r
+                    .checked_mul(uv_hpitch)
+                    .ok_or_else(|| "UV destination stride offset overflow".to_string())?;
+                std::ptr::copy_nonoverlapping(
+                    uv_plane.as_ptr().add(src_offset),
+                    uv_native.add(dst_offset),
+                    uv_row_bytes,
+                );
             }
         }
 
@@ -675,9 +690,7 @@ impl AmfSession {
             let data_vtbl = &*(*data).pVtbl;
             let mut var = AMFVariantStruct::empty();
             if (data_vtbl.GetProperty)(data, AMF_DATA_DTS.as_ptr(), &mut var) == AMF_OK {
-                if let Some(val) = var.as_int64() {
-                    dts = val;
-                }
+                dts = var.as_int64().unwrap_or(dts);
             }
         }
 
@@ -691,14 +704,13 @@ impl AmfSession {
         unsafe {
             let data_vtbl = &*(*data).pVtbl;
             let mut var = AMFVariantStruct::empty();
-            if (data_vtbl.GetProperty)(data, prop_name, &mut var) == AMF_OK {
-                if let Some(val) = var.as_int64() {
-                    if val == AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_IDR
-                        || val == AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_I
-                    {
-                        key = true;
-                    }
-                }
+            if (data_vtbl.GetProperty)(data, prop_name, &mut var) == AMF_OK
+                && matches!(
+                    var.as_int64(),
+                    Some(AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_IDR | AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_I)
+                )
+            {
+                key = true;
             }
         }
 
@@ -828,6 +840,7 @@ fn detect_keyframe(codec: AmfCodec, data: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::device::AmfRuntime;
 
     #[test]
     fn test_config_validation_zero_dimensions() {
@@ -849,7 +862,10 @@ mod tests {
         // Creating session with null device / zero width must fail at dimension validation
         let res = match AmfRuntime::load() {
             Ok(rt) => match AmfDevice::new(&rt) {
-                Ok(dev) => AmfSession::open(&dev, cfg_zero_w),
+                Ok(dev) => {
+                    let dev = Arc::new(dev);
+                    AmfSession::open(&dev, cfg_zero_w)
+                }
                 Err(_) => return,
             },
             Err(_) => return,
@@ -874,7 +890,10 @@ mod tests {
         };
         let res = match AmfRuntime::load() {
             Ok(rt) => match AmfDevice::new(&rt) {
-                Ok(dev) => AmfSession::open(&dev, cfg_zero_fps),
+                Ok(dev) => {
+                    let dev = Arc::new(dev);
+                    AmfSession::open(&dev, cfg_zero_fps)
+                }
                 Err(_) => return,
             },
             Err(_) => return,
@@ -899,7 +918,10 @@ mod tests {
         };
         let res = match AmfRuntime::load() {
             Ok(rt) => match AmfDevice::new(&rt) {
-                Ok(dev) => AmfSession::open(&dev, cfg_h264_main10),
+                Ok(dev) => {
+                    let dev = Arc::new(dev);
+                    AmfSession::open(&dev, cfg_h264_main10)
+                }
                 Err(_) => return,
             },
             Err(_) => return,
@@ -951,46 +973,98 @@ mod tests {
         };
 
         let device = match AmfDevice::new(&runtime) {
-            Ok(dev) => dev,
+            Ok(d) => Arc::new(d),
             Err(e) => {
-                eprintln!("AMF device not created (no AMD hardware?), skipping: {e}");
+                eprintln!("AMF device failed: {e}");
                 return;
             }
         };
 
-        let width = 320u32;
-        let height = 240u32;
         let config = AmfConfig {
-            width,
-            height,
+            width: 1280,
+            height: 720,
             fps_num: 30,
             fps_den: 1,
-            bitrate_kbps: 1000,
-            max_bitrate_kbps: 2000,
+            bitrate_kbps: 4_000,
+            max_bitrate_kbps: 6_000,
             keyframe_interval: 30,
             codec: AmfCodec::H264,
             profile: AmfProfile::Main,
-            cbr: false,
+            cbr: true,
         };
 
         let mut session = match AmfSession::open(&device, config) {
-            Ok(sess) => sess,
+            Ok(s) => s,
             Err(e) => {
-                eprintln!("AMF H.264 session creation declined: {e}");
-                return;
+                eprintln!("Failed to open AMF session: {e}");
+                panic!("Failed to open AMF session: {e}");
             }
         };
 
-        // Submit one solid test frame in NV12
-        let y_plane = vec![128u8; (width * height) as usize];
-        let uv_plane = vec![128u8; (width * (height / 2)) as usize];
-        let submit_res = session.submit_nv12(0, 0, &y_plane, &uv_plane, width as usize, width as usize);
-        assert!(submit_res.is_ok(), "submit_nv12 failed: {:?}", submit_res.err());
+        // Submit 10 synthetic frames
+        let width = 1280usize;
+        let height = 720usize;
+        let y_plane = vec![128u8; width * height];
+        let uv_plane = vec![128u8; width * (height / 2)];
 
-        // Drain the session
-        let drain_res = session.drain();
-        assert!(drain_res.is_ok(), "drain failed: {:?}", drain_res.err());
-        let packets = drain_res.unwrap();
-        println!("AMF session produced {} packet(s)", packets.len());
+        for i in 0..10 {
+            let pts = i * 333333;
+            let dts = pts;
+            session.submit_nv12(pts, dts, &y_plane, &uv_plane, width, width).expect("submit_nv12");
+        }
+
+        let output_packets = session.drain().expect("drain");
+
+        println!("Successfully encoded {} H.264 packets with AMF hardware!", output_packets.len());
+        assert!(!output_packets.is_empty(), "Expected at least 1 encoded packet from AMF");
+        assert!(output_packets[0].key, "First packet should be a keyframe");
+
+        // HEVC Main (8-bit)
+        let hevc_config = AmfConfig {
+            width: 1280,
+            height: 720,
+            fps_num: 30,
+            fps_den: 1,
+            bitrate_kbps: 4_000,
+            max_bitrate_kbps: 6_000,
+            keyframe_interval: 30,
+            codec: AmfCodec::Hevc,
+            profile: AmfProfile::Main,
+            cbr: true,
+        };
+        let mut hevc_session = AmfSession::open(&device, hevc_config).expect("open hevc");
+        for i in 0..10 {
+            let pts = i * 333333;
+            hevc_session.submit_nv12(pts, pts, &y_plane, &uv_plane, width, width).expect("hevc submit_nv12");
+        }
+        let hevc_packets = hevc_session.drain().expect("hevc drain");
+        assert!(!hevc_packets.is_empty(), "Expected at least 1 HEVC packet from AMF");
+        assert!(hevc_packets[0].key, "First HEVC packet should be a keyframe");
+        println!("Successfully encoded {} HEVC Main packets with AMF hardware!", hevc_packets.len());
+
+        // HEVC Main 10 (10-bit P010)
+        let hevc10_config = AmfConfig {
+            width: 1280,
+            height: 720,
+            fps_num: 30,
+            fps_den: 1,
+            bitrate_kbps: 6_000,
+            max_bitrate_kbps: 8_000,
+            keyframe_interval: 30,
+            codec: AmfCodec::Hevc,
+            profile: AmfProfile::Main10,
+            cbr: true,
+        };
+        let mut hevc10_session = AmfSession::open(&device, hevc10_config).expect("open hevc main10");
+        let p010_y = vec![0u8; width * height * 2];
+        let p010_uv = vec![0u8; width * (height / 2) * 2];
+        for i in 0..10 {
+            let pts = i * 333333;
+            hevc10_session.submit_p010(pts, pts, &p010_y, &p010_uv, width * 2, width * 2).expect("hevc10 submit_p010");
+        }
+        let hevc10_packets = hevc10_session.drain().expect("hevc10 drain");
+        assert!(!hevc10_packets.is_empty(), "Expected at least 1 HEVC Main10 packet from AMF");
+        assert!(hevc10_packets[0].key, "First HEVC Main10 packet should be a keyframe");
+        println!("Successfully encoded {} HEVC Main10 packets with AMF hardware!", hevc10_packets.len());
     }
 }

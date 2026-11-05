@@ -11,8 +11,8 @@ use std::sync::Arc;
 use windows::Win32::Foundation::{FreeLibrary, HMODULE, RPC_E_CHANGED_MODE};
 use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_UNKNOWN};
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11_CREATE_DEVICE_FLAG, D3D11_CREATE_DEVICE_VIDEO_SUPPORT, D3D11_SDK_VERSION,
-    D3D11CreateDevice, ID3D11Device, ID3D11Multithread,
+    D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_FLAG, D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
+    D3D11_SDK_VERSION, D3D11CreateDevice, ID3D11Device, ID3D11Multithread,
 };
 use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIAdapter, IDXGIFactory1};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
@@ -216,7 +216,10 @@ impl AmfContext {
     }
 
     /// Initializes the AMF context with a Direct3D 11 device handle.
-    pub fn init_dx11(&self, d3d11_device: *mut c_void, dx_version: u32) -> Result<(), String> {
+    ///
+    /// # Safety
+    /// Caller must ensure `d3d11_device` is a valid Direct3D 11 device handle.
+    pub(crate) unsafe fn init_dx11(&self, d3d11_device: *mut c_void, dx_version: u32) -> Result<(), String> {
         if self.raw.is_null() {
             return Err("AMFContext pointer is null".into());
         }
@@ -313,18 +316,21 @@ fn create_amd_adapter_device() -> Result<ID3D11Device, String> {
         let Ok(desc) = (unsafe { adapter.GetDesc1() }) else {
             continue;
         };
+        let name = String::from_utf16_lossy(&desc.Description);
+        println!("Checking adapter: {name}, VendorId=0x{:x}", desc.VendorId);
         if desc.VendorId != AMD_VENDOR_ID {
             continue;
         }
         let adapter: IDXGIAdapter = adapter.cast().map_err(|e| e.to_string())?;
         let mut device = None;
+        let flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_VIDEO_SUPPORT;
         // SAFETY: D3D11CreateDevice creates a D3D11 device on the specified AMD adapter.
         let mut hr = unsafe {
             D3D11CreateDevice(
                 &adapter,
                 D3D_DRIVER_TYPE_UNKNOWN,
                 HMODULE::default(),
-                D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
+                flags,
                 None,
                 D3D11_SDK_VERSION,
                 Some(&mut device),
@@ -339,7 +345,7 @@ fn create_amd_adapter_device() -> Result<ID3D11Device, String> {
                     &adapter,
                     D3D_DRIVER_TYPE_UNKNOWN,
                     HMODULE::default(),
-                    D3D11_CREATE_DEVICE_FLAG(0),
+                    D3D11_CREATE_DEVICE_BGRA_SUPPORT,
                     None,
                     D3D11_SDK_VERSION,
                     Some(&mut device),
@@ -446,7 +452,8 @@ impl AmfDevice {
 
         let factory = runtime.create_factory()?;
         let context = factory.create_context()?;
-        context.init_dx11(d3d11_device.as_raw(), AMF_DX11_0)?;
+        // SAFETY: d3d11_device is a valid live ID3D11Device.
+        unsafe { context.init_dx11(d3d11_device.as_raw(), AMF_DX11_0)? };
         Ok(Self {
             factory,
             context,

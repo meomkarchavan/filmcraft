@@ -3,6 +3,8 @@
 //!
 //! Safe code: no unsafe blocks. Validates hostile inputs, bounded allocations, and division-by-zero guards.
 
+use std::sync::Arc;
+
 use filmcraft_export::{
     BitrateMode, ColorSignal, EncodedPacket, EncoderFrame, ExportError, ExportSettings, FieldOrder,
     Format, H264Pass, H264Profile, HardwareEncoding, Result, VideoEncoder,
@@ -127,15 +129,15 @@ impl AmfVideoEncoder {
             match self.codec {
                 AmfCodec::H264 => {
                     if self.sps.is_none() || self.pps.is_none() {
-                        if let Ok((sps, pps)) = split_parameter_sets(&p.data) {
+                        let _ = split_parameter_sets(&p.data).map(|(sps, pps)| {
                             self.sps = Some(sps);
                             self.pps = Some(pps);
-                        }
+                        });
                     }
                 }
                 AmfCodec::Hevc => {
                     if self.hvcc.is_none() {
-                        if let Ok((vps, sps, pps)) = split_hevc_parameter_sets(&p.data) {
+                        let _ = split_hevc_parameter_sets(&p.data).map(|(vps, sps, pps)| {
                             let bit_depth = if self.session.config().profile == AmfProfile::Main10 {
                                 10
                             } else {
@@ -150,7 +152,7 @@ impl AmfVideoEncoder {
                             ) {
                                 self.hvcc = Some(hvcc);
                             }
-                        }
+                        });
                     }
                 }
             }
@@ -193,6 +195,7 @@ impl VideoEncoder for AmfVideoEncoder {
         }
     }
 
+    #[allow(clippy::chunks_exact_to_as_chunks)]
     fn encode(&mut self, f: &EncoderFrame<'_>) -> Result<Vec<EncodedPacket>> {
         if f.width != self.w || f.height != self.h {
             return Err(ExportError::Encode(format!(
@@ -474,7 +477,7 @@ pub fn amf_encoder_factory(
     };
 
     let device = match AmfDevice::new(&runtime) {
-        Ok(dev) => dev,
+        Ok(dev) => Arc::new(dev),
         Err(why) => {
             return declined(&format!("failed to initialize Direct3D 11 / AMF device: {why}"));
         }

@@ -126,7 +126,7 @@ fn what_nvenc_does_not_take_goes_to_the_software_encoder() {
         (after.frames - before.frames, after.declined - before.declined)
     };
     // two-pass VBR is a software feature (both passes ask, both are declined)
-    assert_eq!(run("two_pass.mp4", &|s| s.bitrate_mode = BitrateMode::Vbr2Pass), (0, 2));
+    assert_eq!(run("two_pass.mp4", &|s| s.bitrate_mode = BitrateMode::Vbr2Pass), (0, 4));
     // MXF H.264 is an Annex B stream with in-band parameter sets: the software encoder's
     assert_eq!(
         run("mxf.mxf", &|s| {
@@ -136,7 +136,7 @@ fn what_nvenc_does_not_take_goes_to_the_software_encoder() {
         (0, 1)
     );
     // an odd frame size is rounded to even by the pipeline, so NVENC still takes it
-    let hardware_available = filmcraft_platform::nvenc::available();
+    let hardware_available = filmcraft_platform::nvenc::available() || filmcraft_platform::amf::hevc_available();
     let odd = run("odd.mp4", &|s| s.frame_size = Some((641, 359)));
     assert_eq!(odd, if hardware_available { (24, 0) } else { (0, 1) });
     // Off never touches the hardware encoder

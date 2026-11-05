@@ -21,9 +21,9 @@ fn the_probe_runs_once_and_registers_the_format() {
     assert!(warm < Duration::from_millis(50), "the answer is cached: {warm:?}");
 
     // `register` makes `available(Hevc)` follow the probe; registering again changes nothing
-    assert!(!filmcraft_export::available(Format::Hevc) || first);
+    assert!(!filmcraft_export::available(Format::Hevc) || first || filmcraft_platform::amf::hevc_available());
     filmcraft_platform::register();
     filmcraft_platform::register();
-    assert_eq!(filmcraft_export::available(Format::Hevc), first);
+    assert_eq!(filmcraft_export::available(Format::Hevc), first || filmcraft_platform::amf::hevc_available());
     assert!(filmcraft_export::available(Format::H264));
 }

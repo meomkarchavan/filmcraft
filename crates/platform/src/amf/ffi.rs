@@ -49,16 +49,39 @@ pub const AMF_FAIL: AMF_RESULT = 1;
 pub const AMF_UNEXPECTED: AMF_RESULT = 2;
 pub const AMF_ACCESS_DENIED: AMF_RESULT = 3;
 pub const AMF_INVALID_ARG: AMF_RESULT = 4;
-pub const AMF_OUT_OF_MEMORY: AMF_RESULT = 5;
-pub const AMF_NOT_INITIALIZED: AMF_RESULT = 6;
-pub const AMF_NOT_SUPPORTED: AMF_RESULT = 7;
-pub const AMF_NOT_IMPLEMENTED: AMF_RESULT = 8;
-pub const AMF_NOT_FOUND: AMF_RESULT = 9;
-pub const AMF_ALREADY_INITIALIZED: AMF_RESULT = 10;
-pub const AMF_EOF: AMF_RESULT = 11;
-pub const AMF_INPUT_FULL: AMF_RESULT = 36;
-pub const AMF_DECODER_NO_FREE_SURFACES: AMF_RESULT = 38;
-pub const AMF_REPEAT: AMF_RESULT = 40;
+pub const AMF_OUT_OF_RANGE: AMF_RESULT = 5;
+pub const AMF_OUT_OF_MEMORY: AMF_RESULT = 6;
+pub const AMF_INVALID_POINTER: AMF_RESULT = 7;
+pub const AMF_NO_INTERFACE: AMF_RESULT = 8;
+pub const AMF_NOT_IMPLEMENTED: AMF_RESULT = 9;
+pub const AMF_NOT_SUPPORTED: AMF_RESULT = 10;
+pub const AMF_NOT_FOUND: AMF_RESULT = 11;
+pub const AMF_ALREADY_INITIALIZED: AMF_RESULT = 12;
+pub const AMF_NOT_INITIALIZED: AMF_RESULT = 13;
+pub const AMF_INVALID_FORMAT: AMF_RESULT = 14;
+pub const AMF_WRONG_STATE: AMF_RESULT = 15;
+pub const AMF_FILE_NOT_OPEN: AMF_RESULT = 16;
+pub const AMF_NO_DEVICE: AMF_RESULT = 17;
+pub const AMF_DIRECTX_FAILED: AMF_RESULT = 18;
+pub const AMF_OPENCL_FAILED: AMF_RESULT = 19;
+pub const AMF_GLX_FAILED: AMF_RESULT = 20;
+pub const AMF_XV_FAILED: AMF_RESULT = 21;
+pub const AMF_ALSA_FAILED: AMF_RESULT = 22;
+pub const AMF_EOF: AMF_RESULT = 23;
+pub const AMF_REPEAT: AMF_RESULT = 24;
+pub const AMF_INPUT_FULL: AMF_RESULT = 25;
+pub const AMF_RESOLUTION_CHANGED: AMF_RESULT = 26;
+pub const AMF_RESOLUTION_UPDATED: AMF_RESULT = 27;
+pub const AMF_INVALID_DATA_TYPE: AMF_RESULT = 28;
+pub const AMF_INVALID_RESOLUTION: AMF_RESULT = 29;
+pub const AMF_CODEC_NOT_SUPPORTED: AMF_RESULT = 30;
+pub const AMF_SURFACE_FORMAT_NOT_SUPPORTED: AMF_RESULT = 31;
+pub const AMF_SURFACE_MUST_BE_SHARED: AMF_RESULT = 32;
+pub const AMF_DECODER_NOT_PRESENT: AMF_RESULT = 33;
+pub const AMF_DECODER_SURFACE_ALLOCATION_FAILED: AMF_RESULT = 34;
+pub const AMF_DECODER_NO_FREE_SURFACES: AMF_RESULT = 35;
+pub const AMF_ENCODER_NOT_PRESENT: AMF_RESULT = 36;
+pub const AMF_NEED_MORE_INPUT: AMF_RESULT = 44;
 
 // Basic AMF types
 pub type amf_long = i32;
@@ -220,15 +243,15 @@ pub const AMF_VARIANT_EMPTY: AMF_VARIANT_TYPE = 0;
 pub const AMF_VARIANT_BOOL: AMF_VARIANT_TYPE = 1;
 pub const AMF_VARIANT_INT64: AMF_VARIANT_TYPE = 2;
 pub const AMF_VARIANT_DOUBLE: AMF_VARIANT_TYPE = 3;
-pub const AMF_VARIANT_STRING: AMF_VARIANT_TYPE = 4;
-pub const AMF_VARIANT_WSTRING: AMF_VARIANT_TYPE = 5;
-pub const AMF_VARIANT_INTERFACE: AMF_VARIANT_TYPE = 6;
-pub const AMF_VARIANT_FLOAT: AMF_VARIANT_TYPE = 7;
-pub const AMF_VARIANT_RATE: AMF_VARIANT_TYPE = 8;
-pub const AMF_VARIANT_RATIO: AMF_VARIANT_TYPE = 9;
-pub const AMF_VARIANT_COLOR: AMF_VARIANT_TYPE = 10;
-pub const AMF_VARIANT_SIZE: AMF_VARIANT_TYPE = 11;
-pub const AMF_VARIANT_RECT: AMF_VARIANT_TYPE = 12;
+pub const AMF_VARIANT_RECT: AMF_VARIANT_TYPE = 4;
+pub const AMF_VARIANT_SIZE: AMF_VARIANT_TYPE = 5;
+pub const AMF_VARIANT_POINT: AMF_VARIANT_TYPE = 6;
+pub const AMF_VARIANT_RATE: AMF_VARIANT_TYPE = 7;
+pub const AMF_VARIANT_RATIO: AMF_VARIANT_TYPE = 8;
+pub const AMF_VARIANT_COLOR: AMF_VARIANT_TYPE = 9;
+pub const AMF_VARIANT_STRING: AMF_VARIANT_TYPE = 10;
+pub const AMF_VARIANT_WSTRING: AMF_VARIANT_TYPE = 11;
+pub const AMF_VARIANT_INTERFACE: AMF_VARIANT_TYPE = 12;
 
 /// 16-byte value payload for AMFVariantStruct, 8-byte aligned.
 #[repr(C, align(8))]
@@ -634,10 +657,11 @@ pub struct AMFPlaneVtbl {
     pub GetPixelSizeInBytes: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i32,
     pub GetOffsetX: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i32,
     pub GetOffsetY: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i32,
-    pub GetHPitch: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i32,
-    pub GetVPitch: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i32,
     pub GetWidth: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i32,
     pub GetHeight: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i32,
+    pub GetHPitch: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i32,
+    pub GetVPitch: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i32,
+    pub IsTiled: unsafe extern "system" fn(pThis: *mut AMFPlane) -> bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -735,18 +759,6 @@ pub struct AMFSurfaceVtbl {
         width: i32,
         height: i32,
     ) -> AMF_RESULT,
-    pub CopySurfaceRegionScale: unsafe extern "system" fn(
-        pThis: *mut AMFSurface,
-        pDest: *mut AMFSurface,
-        srcX: i32,
-        srcY: i32,
-        srcWidth: i32,
-        srcHeight: i32,
-        dstX: i32,
-        dstY: i32,
-        dstWidth: i32,
-        dstHeight: i32,
-    ) -> AMF_RESULT,
     pub AddObserver_Surface: unsafe extern "system" fn(pThis: *mut AMFSurface, pObserver: *mut c_void),
     pub RemoveObserver_Surface: unsafe extern "system" fn(pThis: *mut AMFSurface, pObserver: *mut c_void),
 }
@@ -809,15 +821,16 @@ pub struct AMFContextVtbl {
     // AMFContext methods
     pub Terminate: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
 
+    // DX9
     pub InitDX9: unsafe extern "system" fn(pThis: *mut AMFContext, pDX9Device: *mut c_void) -> AMF_RESULT,
     pub GetDX9Device: unsafe extern "system" fn(
         pThis: *mut AMFContext,
         dxVersion: u32,
-        ppDX9Device: *mut *mut c_void,
-    ) -> AMF_RESULT,
+    ) -> *mut c_void,
     pub LockDX9: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
     pub UnlockDX9: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
 
+    // DX11
     pub InitDX11: unsafe extern "system" fn(
         pThis: *mut AMFContext,
         pDX11Device: *mut c_void,
@@ -826,37 +839,48 @@ pub struct AMFContextVtbl {
     pub GetDX11Device: unsafe extern "system" fn(
         pThis: *mut AMFContext,
         dxVersion: u32,
-        ppDX11Device: *mut *mut c_void,
-    ) -> AMF_RESULT,
+    ) -> *mut c_void,
     pub LockDX11: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
     pub UnlockDX11: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
 
+    // OpenCL
     pub InitOpenCL: unsafe extern "system" fn(pThis: *mut AMFContext, pCommandQueue: *mut c_void) -> AMF_RESULT,
-    pub GetOpenCLContext: unsafe extern "system" fn(pThis: *mut AMFContext, ppContext: *mut *mut c_void) -> AMF_RESULT,
-    pub GetOpenCLCommandQueue: unsafe extern "system" fn(
+    pub GetOpenCLContext: unsafe extern "system" fn(pThis: *mut AMFContext) -> *mut c_void,
+    pub GetOpenCLCommandQueue: unsafe extern "system" fn(pThis: *mut AMFContext) -> *mut c_void,
+    pub GetOpenCLDeviceID: unsafe extern "system" fn(pThis: *mut AMFContext) -> *mut c_void,
+    pub GetOpenCLComputeFactory: unsafe extern "system" fn(
         pThis: *mut AMFContext,
-        ppCommandQueue: *mut *mut c_void,
+        ppFactory: *mut *mut c_void,
     ) -> AMF_RESULT,
+    pub InitOpenCLEx: unsafe extern "system" fn(pThis: *mut AMFContext, pDevice: *mut c_void) -> AMF_RESULT,
     pub LockOpenCL: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
     pub UnlockOpenCL: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
 
+    // OpenGL
     pub InitOpenGL: unsafe extern "system" fn(
         pThis: *mut AMFContext,
         hOpenGLContext: *mut c_void,
+        hWindow: *mut c_void,
         hDC: *mut c_void,
-        hWnd: *mut c_void,
     ) -> AMF_RESULT,
-    pub GetOpenGLContext: unsafe extern "system" fn(
-        pThis: *mut AMFContext,
-        ppOpenGLContext: *mut *mut c_void,
-    ) -> AMF_RESULT,
-    pub GetOpenGLDrawable: unsafe extern "system" fn(
-        pThis: *mut AMFContext,
-        ppOpenGLDrawable: *mut *mut c_void,
-    ) -> AMF_RESULT,
+    pub GetOpenGLContext: unsafe extern "system" fn(pThis: *mut AMFContext) -> *mut c_void,
+    pub GetOpenGLDrawable: unsafe extern "system" fn(pThis: *mut AMFContext) -> *mut c_void,
     pub LockOpenGL: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
     pub UnlockOpenGL: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
 
+    // XV - Linux
+    pub InitXV: unsafe extern "system" fn(pThis: *mut AMFContext, pXVDevice: *mut c_void) -> AMF_RESULT,
+    pub GetXVDevice: unsafe extern "system" fn(pThis: *mut AMFContext) -> *mut c_void,
+    pub LockXV: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
+    pub UnlockXV: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
+
+    // Gralloc - Android
+    pub InitGralloc: unsafe extern "system" fn(pThis: *mut AMFContext, pGrallocDevice: *mut c_void) -> AMF_RESULT,
+    pub GetGrallocDevice: unsafe extern "system" fn(pThis: *mut AMFContext) -> *mut c_void,
+    pub LockGralloc: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
+    pub UnlockGralloc: unsafe extern "system" fn(pThis: *mut AMFContext) -> AMF_RESULT,
+
+    // Allocation
     pub AllocBuffer: unsafe extern "system" fn(
         pThis: *mut AMFContext,
         type_: AMF_MEMORY_TYPE,
@@ -871,32 +895,13 @@ pub struct AMFContextVtbl {
         height: i32,
         ppSurface: *mut *mut AMFSurface,
     ) -> AMF_RESULT,
-    pub AllocAudioBuffer: unsafe extern "system" fn(
-        pThis: *mut AMFContext,
-        type_: AMF_MEMORY_TYPE,
-        format: u32,
-        samples: i32,
-        sampleRate: i32,
-        channels: i32,
-        ppAudioBuffer: *mut *mut c_void,
-    ) -> AMF_RESULT,
 
+    // Wrap existing objects
     pub CreateBufferFromHostNative: unsafe extern "system" fn(
         pThis: *mut AMFContext,
-        pBuffer: *mut c_void,
+        pHostBuffer: *mut c_void,
         size: usize,
         ppBuffer: *mut *mut AMFBuffer,
-        pObserver: *mut c_void,
-    ) -> AMF_RESULT,
-    pub CreateSurfaceFromHostNative: unsafe extern "system" fn(
-        pThis: *mut AMFContext,
-        format: AMF_SURFACE_FORMAT,
-        width: i32,
-        height: i32,
-        hPitch: i32,
-        vPitch: i32,
-        pBuffer: *mut c_void,
-        ppSurface: *mut *mut AMFSurface,
         pObserver: *mut c_void,
     ) -> AMF_RESULT,
     pub CreateSurfaceFromDX9Native: unsafe extern "system" fn(
@@ -914,29 +919,27 @@ pub struct AMFContextVtbl {
     pub CreateSurfaceFromOpenGLNative: unsafe extern "system" fn(
         pThis: *mut AMFContext,
         format: AMF_SURFACE_FORMAT,
-        hGLTexture: u32,
+        hGLTextureID: *mut c_void,
         ppSurface: *mut *mut AMFSurface,
         pObserver: *mut c_void,
     ) -> AMF_RESULT,
-    pub CreateSurfaceFromOpenCLNative: unsafe extern "system" fn(
+    pub CreateSurfaceFromGrallocNative: unsafe extern "system" fn(
         pThis: *mut AMFContext,
-        format: AMF_SURFACE_FORMAT,
-        width: i32,
-        height: i32,
-        pCLMem: *mut *mut c_void,
+        hGrallocSurface: *mut c_void,
         ppSurface: *mut *mut AMFSurface,
         pObserver: *mut c_void,
     ) -> AMF_RESULT,
     pub CreateBufferFromOpenCLNative: unsafe extern "system" fn(
         pThis: *mut AMFContext,
-        pCLMem: *mut c_void,
+        pCLBuffer: *mut c_void,
         size: usize,
         ppBuffer: *mut *mut AMFBuffer,
-        pObserver: *mut c_void,
     ) -> AMF_RESULT,
+
+    // Access to AMFCompute interface
     pub GetCompute: unsafe extern "system" fn(
         pThis: *mut AMFContext,
-        eComputeType: u32,
+        eMemType: AMF_MEMORY_TYPE,
         ppCompute: *mut *mut c_void,
     ) -> AMF_RESULT,
 }
@@ -1093,8 +1096,8 @@ pub const AMFVideoEncoderVCE_AVC: &[u16] = &[
 
 pub const AMFVideoEncoder_HEVC: &[u16] = &[
     b'A' as u16, b'M' as u16, b'F' as u16, b'V' as u16, b'i' as u16, b'd' as u16, b'e' as u16, b'o' as u16,
-    b'E' as u16, b'n' as u16, b'c' as u16, b'o' as u16, b'd' as u16, b'e' as u16, b'r' as u16, b'_' as u16,
-    b'H' as u16, b'E' as u16, b'V' as u16, b'C' as u16, 0,
+    b'E' as u16, b'n' as u16, b'c' as u16, b'o' as u16, b'd' as u16, b'e' as u16, b'r' as u16, b'H' as u16,
+    b'W' as u16, b'_' as u16, b'H' as u16, b'E' as u16, b'V' as u16, b'C' as u16, 0,
 ];
 
 // ---------------------------------------------------------------------------
@@ -1220,11 +1223,19 @@ pub const AMF_VIDEO_ENCODER_HEVC_NOMINAL_RANGE: &[u16] = &[
 // Rate Control, Presets & Profiles
 // ---------------------------------------------------------------------------
 
-pub const AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_UNKNOWN: i64 = 0;
-pub const AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CONSTRAINED_QP: i64 = 1;
-pub const AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR: i64 = 2;
-pub const AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR: i64 = 3;
-pub const AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_LATENCY_CONSTRAINED_VBR: i64 = 4;
+// H.264 Rate Control (from VideoEncoderVCE.h)
+pub const AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_UNKNOWN: i64 = -1;
+pub const AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CONSTANT_QP: i64 = 0;
+pub const AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_CBR: i64 = 1;
+pub const AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR: i64 = 2;
+pub const AMF_VIDEO_ENCODER_RATE_CONTROL_METHOD_LATENCY_CONSTRAINED_VBR: i64 = 3;
+
+// HEVC Rate Control (from VideoEncoderHEVC.h)
+pub const AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_UNKNOWN: i64 = -1;
+pub const AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CONSTANT_QP: i64 = 0;
+pub const AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_LATENCY_CONSTRAINED_VBR: i64 = 1;
+pub const AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_PEAK_CONSTRAINED_VBR: i64 = 2;
+pub const AMF_VIDEO_ENCODER_HEVC_RATE_CONTROL_METHOD_CBR: i64 = 3;
 
 pub const AMF_VIDEO_ENCODER_USAGE_TRANSCODING: i64 = 0;
 pub const AMF_VIDEO_ENCODER_USAGE_ULTRA_LOW_LATENCY: i64 = 1;

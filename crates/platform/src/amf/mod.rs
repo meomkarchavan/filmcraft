@@ -11,6 +11,8 @@ pub mod session;
 #[cfg(test)]
 mod abi_tests;
 
+use std::sync::Arc;
+
 pub use device::{AmfDevice, AmfRuntime};
 pub use export::{amf_encoder_factory, AmfVideoEncoder};
 pub use session::{AmfCodec, AmfConfig, AmfPacket, AmfProfile, AmfSession};
@@ -33,7 +35,7 @@ pub fn hevc_available() -> bool {
             }
         };
         let device = match AmfDevice::new(&runtime) {
-            Ok(dev) => dev,
+            Ok(dev) => Arc::new(dev),
             Err(why) => {
                 log::info!("no AMF HEVC hardware encoder (device creation failed): {why}");
                 return false;
@@ -74,7 +76,7 @@ pub fn hevc_hdr_available() -> bool {
             }
         };
         let device = match AmfDevice::new(&runtime) {
-            Ok(dev) => dev,
+            Ok(dev) => Arc::new(dev),
             Err(why) => {
                 log::info!("no AMF HEVC Main 10 hardware encoder (device creation failed): {why}");
                 return false;

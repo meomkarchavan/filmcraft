@@ -7,8 +7,9 @@ mod amf_abi_tests {
         assert_eq!(AMF_FULL_VERSION, ((1u64) << 48) | ((4u64) << 32) | ((33u64) << 16) | 0);
         assert_eq!(AMF_OK, 0);
         assert_eq!(AMF_FAIL, 1);
-        assert_eq!(AMF_EOF, 11);
-        assert_eq!(AMF_INPUT_FULL, 36);
+        assert_eq!(AMF_EOF, 23);
+        assert_eq!(AMF_REPEAT, 24);
+        assert_eq!(AMF_INPUT_FULL, 25);
     }
 
     #[test]
@@ -93,15 +94,17 @@ mod amf_abi_tests {
         assert_eq!(std::mem::size_of::<AMFPropertyStorageExVtbl>(), 17 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFDataVtbl>(), 23 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFBufferVtbl>(), 28 * ptr_size);
-        assert_eq!(std::mem::size_of::<AMFPlaneVtbl>(), 12 * ptr_size);
-        assert_eq!(std::mem::size_of::<AMFSurfaceVtbl>(), 34 * ptr_size);
-        assert_eq!(std::mem::size_of::<AMFContextVtbl>(), 43 * ptr_size);
+        assert_eq!(std::mem::size_of::<AMFPlaneVtbl>(), 13 * ptr_size);
+        assert_eq!(std::mem::size_of::<AMFSurfaceVtbl>(), 33 * ptr_size);
+        assert_eq!(std::mem::size_of::<AMFContextVtbl>(), 52 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFComponentVtbl>(), 28 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFFactoryVtbl>(), 7 * ptr_size);
 
         // Verify critical method slot offsets to prevent reordering bugs
         assert_eq!(std::mem::offset_of!(AMFVariantStruct, value), 8);
-        assert_eq!(std::mem::offset_of!(AMFContextVtbl, InitDX11), 17 * ptr_size);
+        assert_eq!(std::mem::offset_of!(AMFContextVtbl, InitDX11), 18 * ptr_size);
+        assert_eq!(std::mem::offset_of!(AMFContextVtbl, AllocSurface), 44 * ptr_size);
+        assert_eq!(std::mem::offset_of!(AMFContextVtbl, CreateSurfaceFromDX11Native), 47 * ptr_size);
         assert_eq!(std::mem::offset_of!(AMFComponentVtbl, Init), 17 * ptr_size);
         assert_eq!(std::mem::offset_of!(AMFComponentVtbl, SubmitInput), 22 * ptr_size);
         assert_eq!(std::mem::offset_of!(AMFComponentVtbl, QueryOutput), 23 * ptr_size);

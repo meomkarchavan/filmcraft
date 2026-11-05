@@ -378,17 +378,17 @@ git commit -m "feat(platform): expose AMF encoder factory and register on Window
 - Modify: `docs/gaps.md`
 - Test: Full cargo test run across `filmcraft-platform`
 
-- [ ] **Step 1: Run complete platform test suite**
+- [x] **Step 1: Run complete platform test suite**
 
 Run: `cargo test -p filmcraft-platform`
 Expected: All tests PASS, with zero regressions.
 
-- [ ] **Step 2: Update documentation gaps list**
+- [x] **Step 2: Update documentation gaps list**
 
 In `docs/gaps.md`:
 Update the Windows hardware encoding section to reflect that AMD AMF H.264 & HEVC encoding is now implemented and active.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/gaps.md

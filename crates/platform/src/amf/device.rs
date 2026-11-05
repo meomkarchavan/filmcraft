@@ -22,7 +22,8 @@ use windows::Win32::System::LibraryLoader::{
 use windows::core::{Interface, PCSTR, w};
 
 use super::ffi::{
-    AMFContext, AMFFactory, AMFInitFn, AMFQueryVersionFn, AMF_DX11_0, AMF_FULL_VERSION, AMF_OK,
+    AMFContext, AMFFactory, AMFInitFn, AMFQueryVersionFn, AMF_ALREADY_INITIALIZED, AMF_DX11_0,
+    AMF_FULL_VERSION, AMF_OK,
 };
 
 /// AMD's PCI vendor ID (ATI / AMD).
@@ -122,12 +123,16 @@ impl AmfRuntime {
         let mut factory: *mut AMFFactory = std::ptr::null_mut();
         // SAFETY: self.inner.init_fn is a valid AMFInitFn pointer, and factory is a valid out-pointer.
         let mut res = unsafe { (self.inner.init_fn)(AMF_FULL_VERSION, &mut factory) };
-        if res != AMF_OK && self.inner.version != 0 && self.inner.version != AMF_FULL_VERSION {
+        if res != AMF_OK
+            && res != AMF_ALREADY_INITIALIZED
+            && self.inner.version != 0
+            && self.inner.version != AMF_FULL_VERSION
+        {
             // Fallback: try using the exact version returned by AMFQueryVersion
             // SAFETY: self.inner.init_fn is a valid AMFInitFn pointer, and factory is a valid out-pointer.
             res = unsafe { (self.inner.init_fn)(self.inner.version, &mut factory) };
         }
-        if res != AMF_OK || factory.is_null() {
+        if (res != AMF_OK && res != AMF_ALREADY_INITIALIZED) || factory.is_null() {
             return Err(format!("AMFInit failed with result code {res}"));
         }
 
@@ -216,8 +221,8 @@ impl AmfContext {
         Ok(())
     }
 
-    /// Locks the DX11 context for thread-safe access.
-    pub fn lock_dx11(&self) -> Result<(), String> {
+    /// Locks the DX11 context for thread-safe access and returns an RAII guard that unlocks it on drop.
+    pub fn lock_dx11<'a>(&'a self) -> Result<AmfContextDx11Guard<'a>, String> {
         if self.raw.is_null() {
             return Err("AMFContext pointer is null".into());
         }
@@ -229,7 +234,7 @@ impl AmfContext {
         if res != AMF_OK {
             return Err(format!("AMFContext::LockDX11 failed with result code {res}"));
         }
-        Ok(())
+        Ok(AmfContextDx11Guard { context: self })
     }
 
     /// Unlocks the DX11 context.
@@ -249,6 +254,27 @@ impl AmfContext {
     }
 }
 
+/// RAII guard for a locked AMF Direct3D 11 context.
+/// Unlocks the DX11 context when dropped.
+#[must_use = "if unused the AmfContext will immediately unlock"]
+pub struct AmfContextDx11Guard<'a> {
+    context: &'a AmfContext,
+}
+
+impl<'a> Drop for AmfContextDx11Guard<'a> {
+    fn drop(&mut self) {
+        let _ = self.context.unlock_dx11();
+    }
+}
+
+impl<'a> std::ops::Deref for AmfContextDx11Guard<'a> {
+    type Target = AmfContext;
+
+    fn deref(&self) -> &Self::Target {
+        self.context
+    }
+}
+
 impl Drop for AmfContext {
     fn drop(&mut self) {
         if !self.raw.is_null() {
@@ -265,19 +291,26 @@ impl Drop for AmfContext {
 
 /// Direct3D 11 helper: enumerates DXGI adapters and creates a device on the first AMD GPU.
 fn create_amd_adapter_device() -> Result<ID3D11Device, String> {
-    // SAFETY: Enumerates DXGI adapters and creates a D3D11 device on the first AMD adapter found.
-    unsafe {
-        let factory: IDXGIFactory1 = CreateDXGIFactory1().map_err(|e| format!("no DXGI factory: {e}"))?;
-        let mut i = 0;
-        while let Ok(adapter) = factory.EnumAdapters1(i) {
-            i += 1;
-            let Ok(desc) = adapter.GetDesc1() else { continue };
-            if desc.VendorId != AMD_VENDOR_ID {
-                continue;
-            }
-            let adapter: IDXGIAdapter = adapter.cast().map_err(|e| e.to_string())?;
-            let mut device = None;
-            let hr = D3D11CreateDevice(
+    // SAFETY: CreateDXGIFactory1 creates a valid DXGI 1.1 factory COM interface.
+    let factory: IDXGIFactory1 =
+        unsafe { CreateDXGIFactory1() }.map_err(|e| format!("no DXGI factory: {e}"))?;
+
+    let mut i = 0;
+    // SAFETY: factory is a valid DXGI factory COM interface; EnumAdapters1 enumerates adapters.
+    while let Ok(adapter) = unsafe { factory.EnumAdapters1(i) } {
+        i += 1;
+        // SAFETY: adapter is a valid DXGI adapter COM interface; GetDesc1 retrieves adapter description.
+        let Ok(desc) = (unsafe { adapter.GetDesc1() }) else {
+            continue;
+        };
+        if desc.VendorId != AMD_VENDOR_ID {
+            continue;
+        }
+        let adapter: IDXGIAdapter = adapter.cast().map_err(|e| e.to_string())?;
+        let mut device = None;
+        // SAFETY: D3D11CreateDevice creates a D3D11 device on the specified AMD adapter.
+        let mut hr = unsafe {
+            D3D11CreateDevice(
                 &adapter,
                 D3D_DRIVER_TYPE_UNKNOWN,
                 HMODULE::default(),
@@ -287,9 +320,12 @@ fn create_amd_adapter_device() -> Result<ID3D11Device, String> {
                 Some(&mut device),
                 None,
                 None,
-            );
-            if hr.is_err() {
-                let _ = D3D11CreateDevice(
+            )
+        };
+        if hr.is_err() {
+            // SAFETY: Fallback: retry creating device without video support flag if driver rejected it.
+            hr = unsafe {
+                D3D11CreateDevice(
                     &adapter,
                     D3D_DRIVER_TYPE_UNKNOWN,
                     HMODULE::default(),
@@ -299,14 +335,18 @@ fn create_amd_adapter_device() -> Result<ID3D11Device, String> {
                     Some(&mut device),
                     None,
                     None,
-                );
+                )
+            };
+        }
+        if let Some(dev) = device {
+            let mt: ID3D11Multithread = dev
+                .cast()
+                .map_err(|e| format!("Direct3D 11 device does not support ID3D11Multithread: {e}"))?;
+            // SAFETY: COM call on live ID3D11Multithread interface to enable multithread protection.
+            unsafe {
+                let _ = mt.SetMultithreadProtected(true);
             }
-            if let Some(dev) = device {
-                if let Ok(mt) = dev.cast::<ID3D11Multithread>() {
-                    let _ = mt.SetMultithreadProtected(true);
-                }
-                return Ok(dev);
-            }
+            return Ok(dev);
         }
     }
     Err("No AMD adapter found".into())
@@ -316,8 +356,8 @@ fn create_amd_adapter_device() -> Result<ID3D11Device, String> {
 fn create_default_d3d11_device() -> Result<ID3D11Device, String> {
     let mut device = None;
     // SAFETY: Uses default hardware adapter with valid out-pointers.
-    unsafe {
-        let hr = D3D11CreateDevice(
+    let mut hr = unsafe {
+        D3D11CreateDevice(
             None::<&IDXGIAdapter>,
             D3D_DRIVER_TYPE_HARDWARE,
             HMODULE::default(),
@@ -327,9 +367,12 @@ fn create_default_d3d11_device() -> Result<ID3D11Device, String> {
             Some(&mut device),
             None,
             None,
-        );
-        if hr.is_err() {
-            let _ = D3D11CreateDevice(
+        )
+    };
+    if hr.is_err() {
+        // SAFETY: Fallback: retry creating device without video support flag if driver rejected it.
+        hr = unsafe {
+            D3D11CreateDevice(
                 None::<&IDXGIAdapter>,
                 D3D_DRIVER_TYPE_HARDWARE,
                 HMODULE::default(),
@@ -339,15 +382,16 @@ fn create_default_d3d11_device() -> Result<ID3D11Device, String> {
                 Some(&mut device),
                 None,
                 None,
-            );
-        }
+            )
+        };
     }
-    let dev = device.ok_or_else(|| "Failed to create Direct3D 11 device".to_string())?;
-    if let Ok(mt) = dev.cast::<ID3D11Multithread>() {
-        // SAFETY: COM call on live ID3D11Multithread interface.
-        unsafe {
-            let _ = mt.SetMultithreadProtected(true);
-        }
+    let dev = device.ok_or_else(|| format!("Failed to create Direct3D 11 device: {hr:?}"))?;
+    let mt: ID3D11Multithread = dev
+        .cast()
+        .map_err(|e| format!("Direct3D 11 device does not support ID3D11Multithread: {e}"))?;
+    // SAFETY: COM call on live ID3D11Multithread interface to enable multithread protection.
+    unsafe {
+        let _ = mt.SetMultithreadProtected(true);
     }
     Ok(dev)
 }
@@ -382,6 +426,14 @@ impl AmfDevice {
 
     /// Creates a new `AmfDevice` with a caller-provided Direct3D 11 device.
     pub fn with_d3d11_device(runtime: &AmfRuntime, d3d11_device: ID3D11Device) -> Result<Self, String> {
+        let multithread: ID3D11Multithread = d3d11_device
+            .cast()
+            .map_err(|e| format!("Direct3D 11 device does not support ID3D11Multithread: {e}"))?;
+        // SAFETY: COM call on live ID3D11Multithread interface to enable multithread protection.
+        unsafe {
+            let _ = multithread.SetMultithreadProtected(true);
+        }
+
         let factory = runtime.create_factory()?;
         let context = factory.create_context()?;
         context.init_dx11(d3d11_device.as_raw(), AMF_DX11_0)?;
@@ -435,6 +487,14 @@ mod tests {
         let factory = factory.unwrap();
         assert!(!factory.as_raw().is_null());
 
+        // Test calling create_factory again in the same process (AMF_ALREADY_INITIALIZED handling)
+        let factory2 = runtime.create_factory();
+        assert!(
+            factory2.is_ok(),
+            "second create_factory failed (AMF_ALREADY_INITIALIZED not handled): {:?}",
+            factory2.err()
+        );
+
         let context = factory.create_context();
         assert!(context.is_ok(), "create_context failed: {:?}", context.err());
         let context = context.unwrap();
@@ -446,5 +506,10 @@ mod tests {
         assert!(!device.context().as_raw().is_null());
         assert!(!device.factory().as_raw().is_null());
         assert!(!device.d3d11_device_raw().is_null());
+
+        // Test RAII DX11 lock guard
+        let guard = device.context().lock_dx11();
+        assert!(guard.is_ok(), "lock_dx11 failed: {:?}", guard.err());
+        drop(guard);
     }
 }

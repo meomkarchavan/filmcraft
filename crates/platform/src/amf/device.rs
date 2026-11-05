@@ -165,6 +165,11 @@ impl AmfFactory {
         self.raw
     }
 
+    /// Returns a reference to the loaded `AmfRuntime`.
+    pub fn runtime(&self) -> &AmfRuntime {
+        &self._runtime
+    }
+
     /// Creates a new uninitialized AMF context.
     pub fn create_context(&self) -> Result<AmfContext, String> {
         if self.raw.is_null() {
@@ -203,6 +208,11 @@ impl AmfContext {
     /// Returns the raw pointer to the underlying `AMFContext`.
     pub fn as_raw(&self) -> *mut AMFContext {
         self.raw
+    }
+
+    /// Returns a reference to the loaded `AmfRuntime`.
+    pub fn runtime(&self) -> &AmfRuntime {
+        &self._runtime
     }
 
     /// Initializes the AMF context with a Direct3D 11 device handle.
@@ -462,6 +472,11 @@ impl AmfDevice {
     /// Returns the raw pointer to the `ID3D11Device`.
     pub fn d3d11_device_raw(&self) -> *mut c_void {
         self.d3d11_device.as_raw()
+    }
+
+    /// Returns a reference to the loaded `AmfRuntime`.
+    pub fn runtime(&self) -> &AmfRuntime {
+        &self.factory._runtime
     }
 }
 

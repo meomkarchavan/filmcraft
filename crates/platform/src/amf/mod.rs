@@ -1,9 +1,11 @@
 //! AMD Advanced Media Framework (AMF) hardware encoding support.
 
 #[allow(unsafe_code)]
-pub(crate) mod device;
+pub mod device;
 #[allow(unsafe_code)]
-pub(crate) mod ffi;
+pub mod ffi;
+#[allow(unsafe_code)]
+pub mod session;
 
 #[cfg(test)]
 mod abi_tests;

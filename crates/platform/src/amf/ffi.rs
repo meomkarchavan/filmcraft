@@ -1244,3 +1244,29 @@ pub const AMF_VIDEO_ENCODER_HEVC_PROFILE_MAIN_10: i64 = 2;
 
 pub const AMF_COLOR_BIT_DEPTH_8: i64 = 8;
 pub const AMF_COLOR_BIT_DEPTH_10: i64 = 10;
+
+// Output data type property names and values
+pub const AMF_DATA_DTS: &[u16] = &[b'D' as u16, b'T' as u16, b'S' as u16, 0];
+
+pub const AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE: &[u16] = &[
+    b'O' as u16, b'u' as u16, b't' as u16, b'p' as u16, b'u' as u16, b't' as u16,
+    b'D' as u16, b'a' as u16, b't' as u16, b'a' as u16, b'T' as u16, b'y' as u16,
+    b'p' as u16, b'e' as u16, 0,
+];
+
+pub const AMF_VIDEO_ENCODER_HEVC_OUTPUT_DATA_TYPE: &[u16] = &[
+    b'H' as u16, b'e' as u16, b'v' as u16, b'c' as u16,
+    b'O' as u16, b'u' as u16, b't' as u16, b'p' as u16, b'u' as u16, b't' as u16,
+    b'D' as u16, b'a' as u16, b't' as u16, b'a' as u16, b'T' as u16, b'y' as u16,
+    b'p' as u16, b'e' as u16, 0,
+];
+
+pub const AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_IDR: i64 = 0;
+pub const AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_I: i64 = 1;
+pub const AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_P: i64 = 2;
+pub const AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_B: i64 = 3;
+
+pub const AMF_VIDEO_ENCODER_HEVC_OUTPUT_DATA_TYPE_IDR: i64 = 0;
+pub const AMF_VIDEO_ENCODER_HEVC_OUTPUT_DATA_TYPE_I: i64 = 1;
+pub const AMF_VIDEO_ENCODER_HEVC_OUTPUT_DATA_TYPE_P: i64 = 2;
+pub const AMF_VIDEO_ENCODER_HEVC_OUTPUT_DATA_TYPE_B: i64 = 3;

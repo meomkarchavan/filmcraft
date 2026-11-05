@@ -107,4 +107,17 @@ mod amf_abi_tests {
         assert_eq!(std::mem::offset_of!(AMFComponentVtbl, QueryOutput), 23 * ptr_size);
         assert_eq!(std::mem::offset_of!(AMFSurfaceVtbl, GetPlaneAt), 25 * ptr_size);
     }
+
+    #[test]
+    fn amf_encoder_property_constants() {
+        assert_eq!(AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_IDR, 0);
+        assert_eq!(AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_I, 1);
+        assert_eq!(AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_P, 2);
+        assert_eq!(AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_B, 3);
+
+        assert_eq!(AMF_VIDEO_ENCODER_HEVC_OUTPUT_DATA_TYPE_IDR, 0);
+        assert_eq!(AMF_VIDEO_ENCODER_HEVC_OUTPUT_DATA_TYPE_I, 1);
+        assert_eq!(AMF_VIDEO_ENCODER_HEVC_OUTPUT_DATA_TYPE_P, 2);
+        assert_eq!(AMF_VIDEO_ENCODER_HEVC_OUTPUT_DATA_TYPE_B, 3);
+    }
 }

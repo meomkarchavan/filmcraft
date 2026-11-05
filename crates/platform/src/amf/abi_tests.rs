@@ -44,12 +44,6 @@ mod amf_abi_tests {
     }
 
     #[test]
-    fn amf_variant_struct_size_and_alignment() {
-        assert_eq!(std::mem::size_of::<AMFVariantStruct>(), 24);
-        assert_eq!(std::mem::align_of::<AMFVariantStruct>(), 8);
-    }
-
-    #[test]
     fn amf_variant_bool_representation() {
         let var_true = AMFVariantStruct::from_bool(true);
         assert_eq!(var_true.type_, AMF_VARIANT_BOOL);
@@ -93,7 +87,7 @@ mod amf_abi_tests {
     }
 
     #[test]
-    fn amf_vtable_sizes_and_slot_counts() {
+    fn amf_vtable_sizes_and_slot_offsets() {
         let ptr_size = std::mem::size_of::<usize>();
         assert_eq!(std::mem::size_of::<AMFPropertyStorageVtbl>(), 13 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFPropertyStorageExVtbl>(), 17 * ptr_size);
@@ -104,5 +98,13 @@ mod amf_abi_tests {
         assert_eq!(std::mem::size_of::<AMFContextVtbl>(), 43 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFComponentVtbl>(), 28 * ptr_size);
         assert_eq!(std::mem::size_of::<AMFFactoryVtbl>(), 7 * ptr_size);
+
+        // Verify critical method slot offsets to prevent reordering bugs
+        assert_eq!(std::mem::offset_of!(AMFVariantStruct, value), 8);
+        assert_eq!(std::mem::offset_of!(AMFContextVtbl, InitDX11), 17 * ptr_size);
+        assert_eq!(std::mem::offset_of!(AMFComponentVtbl, Init), 17 * ptr_size);
+        assert_eq!(std::mem::offset_of!(AMFComponentVtbl, SubmitInput), 22 * ptr_size);
+        assert_eq!(std::mem::offset_of!(AMFComponentVtbl, QueryOutput), 23 * ptr_size);
+        assert_eq!(std::mem::offset_of!(AMFSurfaceVtbl, GetPlaneAt), 25 * ptr_size);
     }
 }

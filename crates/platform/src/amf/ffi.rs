@@ -60,6 +60,10 @@ pub const AMF_INPUT_FULL: AMF_RESULT = 36;
 pub const AMF_DECODER_NO_FREE_SURFACES: AMF_RESULT = 38;
 pub const AMF_REPEAT: AMF_RESULT = 40;
 
+// Basic AMF types
+pub type amf_long = i32;
+pub type amf_bool = u8;
+
 // AMF_MEMORY_TYPE
 pub type AMF_MEMORY_TYPE = u32;
 
@@ -108,6 +112,14 @@ pub const AMF_FRAME_PROGRESSIVE: AMF_FRAME_TYPE = 1;
 pub const AMF_FRAME_INTERLACED_EVEN: AMF_FRAME_TYPE = 2;
 pub const AMF_FRAME_INTERLACED_ODD: AMF_FRAME_TYPE = 3;
 
+// AMF_DATA_TYPE
+pub type AMF_DATA_TYPE = u32;
+
+pub const AMF_DATA_BUFFER: AMF_DATA_TYPE = 0;
+pub const AMF_DATA_SURFACE: AMF_DATA_TYPE = 1;
+pub const AMF_DATA_AUDIO_BUFFER: AMF_DATA_TYPE = 2;
+pub const AMF_DATA_USER: AMF_DATA_TYPE = 1000;
+
 /// 128-bit GUID matching the Windows GUID layout.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -123,6 +135,13 @@ pub const IID_AMFPropertyStorage: AMFGuid = AMFGuid {
     data2: 0xcfb9,
     data3: 0x48af,
     data4: [0xac, 0xe3, 0xf6, 0x8d, 0xf8, 0x39, 0x5f, 0xe3],
+};
+
+pub const IID_AMFPropertyStorageEx: AMFGuid = AMFGuid {
+    data1: 0x524b07cf,
+    data2: 0x1d36,
+    data3: 0x4864,
+    data4: [0x8a, 0x22, 0x41, 0xeb, 0x93, 0x96, 0x97, 0x5b],
 };
 
 pub const IID_AMFContext: AMFGuid = AMFGuid {
@@ -217,7 +236,7 @@ pub const AMF_VARIANT_RECT: AMF_VARIANT_TYPE = 12;
 pub union AMFVariantValue {
     pub int64_value: i64,
     pub double_value: f64,
-    pub bool_value: bool,
+    pub bool_value: amf_bool,
     pub ptr_value: *mut c_void,
     pub wstring_value: *const u16,
     pub string_value: *const std::ffi::c_char,
@@ -260,7 +279,9 @@ impl AMFVariantStruct {
         Self {
             type_: AMF_VARIANT_BOOL,
             padding: 0,
-            value: AMFVariantValue { bool_value: v },
+            value: AMFVariantValue {
+                bool_value: if v { 1 } else { 0 },
+            },
         }
     }
 
@@ -285,6 +306,26 @@ impl AMFVariantStruct {
             },
         }
     }
+
+    #[inline]
+    pub fn as_bool(&self) -> Option<bool> {
+        if self.type_ == AMF_VARIANT_BOOL {
+            // SAFETY: type_ check ensures bool_value is active and valid (0 or 1)
+            Some(unsafe { self.value.bool_value != 0 })
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn as_int64(&self) -> Option<i64> {
+        if self.type_ == AMF_VARIANT_INT64 {
+            // SAFETY: type_ check ensures int64_value is active
+            Some(unsafe { self.value.int64_value })
+        } else {
+            None
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -299,8 +340,8 @@ pub struct AMFPropertyStorage {
 #[repr(C)]
 pub struct AMFPropertyStorageVtbl {
     // AMFInterface methods
-    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFPropertyStorage) -> i64,
-    pub Release: unsafe extern "system" fn(pThis: *mut AMFPropertyStorage) -> i64,
+    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFPropertyStorage) -> i32,
+    pub Release: unsafe extern "system" fn(pThis: *mut AMFPropertyStorage) -> i32,
     pub QueryInterface: unsafe extern "system" fn(
         pThis: *mut AMFPropertyStorage,
         interfaceID: *const AMFGuid,
@@ -344,6 +385,81 @@ pub struct AMFPropertyStorageVtbl {
 }
 
 // ---------------------------------------------------------------------------
+// AMFPropertyStorageEx
+// ---------------------------------------------------------------------------
+
+#[repr(C)]
+pub struct AMFPropertyStorageEx {
+    pub pVtbl: *const AMFPropertyStorageExVtbl,
+}
+
+#[repr(C)]
+pub struct AMFPropertyStorageExVtbl {
+    // AMFInterface methods
+    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFPropertyStorageEx) -> i32,
+    pub Release: unsafe extern "system" fn(pThis: *mut AMFPropertyStorageEx) -> i32,
+    pub QueryInterface: unsafe extern "system" fn(
+        pThis: *mut AMFPropertyStorageEx,
+        interfaceID: *const AMFGuid,
+        ppInterface: *mut *mut c_void,
+    ) -> AMF_RESULT,
+
+    // AMFPropertyStorage methods
+    pub SetProperty: unsafe extern "system" fn(
+        pThis: *mut AMFPropertyStorageEx,
+        name: *const u16,
+        value: AMFVariantStruct,
+    ) -> AMF_RESULT,
+    pub GetProperty: unsafe extern "system" fn(
+        pThis: *mut AMFPropertyStorageEx,
+        name: *const u16,
+        pValue: *mut AMFVariantStruct,
+    ) -> AMF_RESULT,
+    pub HasProperty: unsafe extern "system" fn(pThis: *mut AMFPropertyStorageEx, name: *const u16) -> bool,
+    pub GetPropertyCount: unsafe extern "system" fn(pThis: *mut AMFPropertyStorageEx) -> usize,
+    pub GetPropertyAt: unsafe extern "system" fn(
+        pThis: *mut AMFPropertyStorageEx,
+        index: usize,
+        name: *mut u16,
+        nameSize: usize,
+        pValue: *mut AMFVariantStruct,
+    ) -> AMF_RESULT,
+    pub Clear: unsafe extern "system" fn(pThis: *mut AMFPropertyStorageEx) -> AMF_RESULT,
+    pub AddTo: unsafe extern "system" fn(
+        pThis: *mut AMFPropertyStorageEx,
+        pDest: *mut AMFPropertyStorage,
+        bOverwrite: bool,
+        bDeep: bool,
+    ) -> AMF_RESULT,
+    pub CopyTo: unsafe extern "system" fn(
+        pThis: *mut AMFPropertyStorageEx,
+        pDest: *mut AMFPropertyStorage,
+        bDeep: bool,
+    ) -> AMF_RESULT,
+    pub AddObserver: unsafe extern "system" fn(pThis: *mut AMFPropertyStorageEx, pObserver: *mut c_void),
+    pub RemoveObserver: unsafe extern "system" fn(pThis: *mut AMFPropertyStorageEx, pObserver: *mut c_void),
+
+    // AMFPropertyStorageEx methods
+    pub GetPropertiesInfoCount: unsafe extern "system" fn(pThis: *const AMFPropertyStorage) -> usize,
+    pub GetPropertyInfoAt: unsafe extern "system" fn(
+        pThis: *const AMFPropertyStorage,
+        index: usize,
+        ppInfo: *mut *const c_void,
+    ) -> AMF_RESULT,
+    pub GetPropertyInfo: unsafe extern "system" fn(
+        pThis: *const AMFPropertyStorage,
+        name: *const u16,
+        ppInfo: *mut *const c_void,
+    ) -> AMF_RESULT,
+    pub ValidateProperty: unsafe extern "system" fn(
+        pThis: *const AMFPropertyStorage,
+        name: *const u16,
+        value: AMFVariantStruct,
+        pOutValidated: *mut AMFVariantStruct,
+    ) -> AMF_RESULT,
+}
+
+// ---------------------------------------------------------------------------
 // AMFData
 // ---------------------------------------------------------------------------
 
@@ -355,8 +471,8 @@ pub struct AMFData {
 #[repr(C)]
 pub struct AMFDataVtbl {
     // AMFInterface methods
-    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFData) -> i64,
-    pub Release: unsafe extern "system" fn(pThis: *mut AMFData) -> i64,
+    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFData) -> i32,
+    pub Release: unsafe extern "system" fn(pThis: *mut AMFData) -> i32,
     pub QueryInterface: unsafe extern "system" fn(
         pThis: *mut AMFData,
         interfaceID: *const AMFGuid,
@@ -407,11 +523,12 @@ pub struct AMFDataVtbl {
     ) -> AMF_RESULT,
     pub Convert: unsafe extern "system" fn(pThis: *mut AMFData, type_: AMF_MEMORY_TYPE) -> AMF_RESULT,
     pub Interop: unsafe extern "system" fn(pThis: *mut AMFData, type_: AMF_MEMORY_TYPE) -> AMF_RESULT,
-    pub DataType: unsafe extern "system" fn(pThis: *mut AMFData) -> u32,
-    pub GetPts: unsafe extern "system" fn(pThis: *mut AMFData) -> i64,
+    pub GetDataType: unsafe extern "system" fn(pThis: *mut AMFData) -> AMF_DATA_TYPE,
+    pub IsReusable: unsafe extern "system" fn(pThis: *mut AMFData) -> bool,
     pub SetPts: unsafe extern "system" fn(pThis: *mut AMFData, pts: i64),
-    pub GetDuration: unsafe extern "system" fn(pThis: *mut AMFData) -> i64,
+    pub GetPts: unsafe extern "system" fn(pThis: *mut AMFData) -> i64,
     pub SetDuration: unsafe extern "system" fn(pThis: *mut AMFData, duration: i64),
+    pub GetDuration: unsafe extern "system" fn(pThis: *mut AMFData) -> i64,
 }
 
 // ---------------------------------------------------------------------------
@@ -426,8 +543,8 @@ pub struct AMFBuffer {
 #[repr(C)]
 pub struct AMFBufferVtbl {
     // AMFInterface methods
-    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFBuffer) -> i64,
-    pub Release: unsafe extern "system" fn(pThis: *mut AMFBuffer) -> i64,
+    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFBuffer) -> i32,
+    pub Release: unsafe extern "system" fn(pThis: *mut AMFBuffer) -> i32,
     pub QueryInterface: unsafe extern "system" fn(
         pThis: *mut AMFBuffer,
         interfaceID: *const AMFGuid,
@@ -478,11 +595,12 @@ pub struct AMFBufferVtbl {
     ) -> AMF_RESULT,
     pub Convert: unsafe extern "system" fn(pThis: *mut AMFBuffer, type_: AMF_MEMORY_TYPE) -> AMF_RESULT,
     pub Interop: unsafe extern "system" fn(pThis: *mut AMFBuffer, type_: AMF_MEMORY_TYPE) -> AMF_RESULT,
-    pub DataType: unsafe extern "system" fn(pThis: *mut AMFBuffer) -> u32,
-    pub GetPts: unsafe extern "system" fn(pThis: *mut AMFBuffer) -> i64,
+    pub GetDataType: unsafe extern "system" fn(pThis: *mut AMFBuffer) -> AMF_DATA_TYPE,
+    pub IsReusable: unsafe extern "system" fn(pThis: *mut AMFBuffer) -> bool,
     pub SetPts: unsafe extern "system" fn(pThis: *mut AMFBuffer, pts: i64),
-    pub GetDuration: unsafe extern "system" fn(pThis: *mut AMFBuffer) -> i64,
+    pub GetPts: unsafe extern "system" fn(pThis: *mut AMFBuffer) -> i64,
     pub SetDuration: unsafe extern "system" fn(pThis: *mut AMFBuffer, duration: i64),
+    pub GetDuration: unsafe extern "system" fn(pThis: *mut AMFBuffer) -> i64,
 
     // AMFBuffer methods
     pub SetSize: unsafe extern "system" fn(pThis: *mut AMFBuffer, newSize: usize) -> AMF_RESULT,
@@ -503,8 +621,8 @@ pub struct AMFPlane {
 
 #[repr(C)]
 pub struct AMFPlaneVtbl {
-    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i64,
-    pub Release: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i64,
+    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i32,
+    pub Release: unsafe extern "system" fn(pThis: *mut AMFPlane) -> i32,
     pub QueryInterface: unsafe extern "system" fn(
         pThis: *mut AMFPlane,
         interfaceID: *const AMFGuid,
@@ -534,8 +652,8 @@ pub struct AMFSurface {
 #[repr(C)]
 pub struct AMFSurfaceVtbl {
     // AMFInterface methods
-    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFSurface) -> i64,
-    pub Release: unsafe extern "system" fn(pThis: *mut AMFSurface) -> i64,
+    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFSurface) -> i32,
+    pub Release: unsafe extern "system" fn(pThis: *mut AMFSurface) -> i32,
     pub QueryInterface: unsafe extern "system" fn(
         pThis: *mut AMFSurface,
         interfaceID: *const AMFGuid,
@@ -586,11 +704,12 @@ pub struct AMFSurfaceVtbl {
     ) -> AMF_RESULT,
     pub Convert: unsafe extern "system" fn(pThis: *mut AMFSurface, type_: AMF_MEMORY_TYPE) -> AMF_RESULT,
     pub Interop: unsafe extern "system" fn(pThis: *mut AMFSurface, type_: AMF_MEMORY_TYPE) -> AMF_RESULT,
-    pub DataType: unsafe extern "system" fn(pThis: *mut AMFSurface) -> u32,
-    pub GetPts: unsafe extern "system" fn(pThis: *mut AMFSurface) -> i64,
+    pub GetDataType: unsafe extern "system" fn(pThis: *mut AMFSurface) -> AMF_DATA_TYPE,
+    pub IsReusable: unsafe extern "system" fn(pThis: *mut AMFSurface) -> bool,
     pub SetPts: unsafe extern "system" fn(pThis: *mut AMFSurface, pts: i64),
-    pub GetDuration: unsafe extern "system" fn(pThis: *mut AMFSurface) -> i64,
+    pub GetPts: unsafe extern "system" fn(pThis: *mut AMFSurface) -> i64,
     pub SetDuration: unsafe extern "system" fn(pThis: *mut AMFSurface, duration: i64),
+    pub GetDuration: unsafe extern "system" fn(pThis: *mut AMFSurface) -> i64,
 
     // AMFSurface methods
     pub GetFormat: unsafe extern "system" fn(pThis: *mut AMFSurface) -> AMF_SURFACE_FORMAT,
@@ -644,8 +763,8 @@ pub struct AMFContext {
 #[repr(C)]
 pub struct AMFContextVtbl {
     // AMFInterface methods
-    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFContext) -> i64,
-    pub Release: unsafe extern "system" fn(pThis: *mut AMFContext) -> i64,
+    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFContext) -> i32,
+    pub Release: unsafe extern "system" fn(pThis: *mut AMFContext) -> i32,
     pub QueryInterface: unsafe extern "system" fn(
         pThis: *mut AMFContext,
         interfaceID: *const AMFGuid,
@@ -834,8 +953,8 @@ pub struct AMFComponent {
 #[repr(C)]
 pub struct AMFComponentVtbl {
     // AMFInterface methods
-    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFComponent) -> i64,
-    pub Release: unsafe extern "system" fn(pThis: *mut AMFComponent) -> i64,
+    pub Acquire: unsafe extern "system" fn(pThis: *mut AMFComponent) -> i32,
+    pub Release: unsafe extern "system" fn(pThis: *mut AMFComponent) -> i32,
     pub QueryInterface: unsafe extern "system" fn(
         pThis: *mut AMFComponent,
         interfaceID: *const AMFGuid,
@@ -876,6 +995,25 @@ pub struct AMFComponentVtbl {
     ) -> AMF_RESULT,
     pub AddObserver: unsafe extern "system" fn(pThis: *mut AMFComponent, pObserver: *mut c_void),
     pub RemoveObserver: unsafe extern "system" fn(pThis: *mut AMFComponent, pObserver: *mut c_void),
+
+    // AMFPropertyStorageEx methods
+    pub GetPropertiesInfoCount: unsafe extern "system" fn(pThis: *const AMFPropertyStorage) -> usize,
+    pub GetPropertyInfoAt: unsafe extern "system" fn(
+        pThis: *const AMFPropertyStorage,
+        index: usize,
+        ppInfo: *mut *const c_void,
+    ) -> AMF_RESULT,
+    pub GetPropertyInfo: unsafe extern "system" fn(
+        pThis: *const AMFPropertyStorage,
+        name: *const u16,
+        ppInfo: *mut *const c_void,
+    ) -> AMF_RESULT,
+    pub ValidateProperty: unsafe extern "system" fn(
+        pThis: *const AMFPropertyStorage,
+        name: *const u16,
+        value: AMFVariantStruct,
+        pOutValidated: *mut AMFVariantStruct,
+    ) -> AMF_RESULT,
 
     // AMFComponent methods
     pub Init: unsafe extern "system" fn(
